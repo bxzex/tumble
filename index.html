@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tumble</title>
+<meta name="description" content="A 2D rigid body physics engine written from scratch. Separating axis collision detection, a sequential impulse solver, friction and restitution." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Chivo+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#000; --ink:#fff; --mid:#8a8a8a; --low:#3c3c3c; --line:#202020;
+  --c1:#ff2e4d; --c2:#ffe500; --c3:#00e0ff; --c4:#9b5cff; --c5:#00ff85;
+  --d:"Anton",Impact,sans-serif;
+  --m:"Chivo Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--m)}
+body{padding:0 18px 48px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1200px;margin:0 auto}
+
+header{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;padding:30px 0 16px;border-bottom:3px solid var(--ink)}
+h1{font-family:var(--d);font-size:78px;line-height:.82;margin:0;letter-spacing:.01em;text-transform:uppercase}
+h1 span{-webkit-text-stroke:2px var(--ink);color:transparent}
+.sub{font-size:12.5px;color:var(--mid);max-width:44ch;line-height:1.55;margin:0 0 7px}
+.ver{margin-left:auto;font-size:11px;color:var(--low);letter-spacing:.2em;margin-bottom:8px}
+
+.bar{display:flex;gap:0;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.bar button{font-family:var(--m);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mid);background:none;border:0;border-right:1px solid var(--line);padding:14px 18px;cursor:pointer}
+.bar button:hover{color:var(--ink);background:#0d0d0d}
+.bar button.on{color:#000;background:var(--c2)}
+.bar .right{margin-left:auto;display:flex;align-items:center;gap:16px;padding:0 4px;font-size:11px;color:var(--low);letter-spacing:.1em}
+
+.stage{position:relative;margin-top:0;border-bottom:1px solid var(--line)}
+canvas{display:block;width:100%;background:#000;cursor:crosshair;touch-action:none}
+.hud{position:absolute;top:14px;left:14px;font-size:10.5px;line-height:1.8;color:var(--low);letter-spacing:.08em;pointer-events:none}
+.hud b{color:var(--ink);font-weight:500}
+.tip{position:absolute;bottom:14px;left:14px;font-size:10.5px;color:var(--low);letter-spacing:.08em}
+
+.deck{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:0;border-bottom:1px solid var(--line)}
+.cell{padding:15px 18px;border-right:1px solid var(--line)}
+.cell label{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--low);margin-bottom:9px}
+.cell label b{color:var(--c2);font-weight:700}
+input[type=range]{width:100%;accent-color:var(--c1);background:transparent;height:14px}
+.toggles{display:flex;gap:18px;flex-wrap:wrap;padding:14px 18px;font-size:11px;color:var(--mid);letter-spacing:.08em;border-bottom:1px solid var(--line)}
+.toggles label{cursor:pointer;user-select:none}
+.toggles input{accent-color:var(--c2)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0}
+.stat{padding:16px 18px;border-right:1px solid var(--line)}
+.stat .k{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--low)}
+.stat .v{font-family:var(--d);font-size:34px;line-height:1;margin-top:8px;letter-spacing:.01em}
+footer{font-size:11.5px;color:var(--low);margin-top:22px;line-height:1.8;letter-spacing:.03em}
+footer a{color:var(--mid)}
+@media(max-width:700px){h1{font-size:50px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>TUM<span>BLE</span></h1>
+    <p class="sub" style="margin-top:10px">A 2D rigid body physics engine written from nothing. Separating axis collision detection, a sequential impulse solver, friction, restitution and sleeping.</p>
+  </div>
+  <span class="ver">NO ENGINE · NO LIBRARY</span>
+</header>
+
+<div class="bar" id="scenes">
+  <div class="right"><span id="fps">— fps</span><span id="mode">RUNNING</span></div>
+</div>
+
+<div class="stage">
+  <canvas id="c" height="560"></canvas>
+  <div class="hud" id="hud"></div>
+  <div class="tip">click to drop a body · drag a body to throw it · right click to explode</div>
+</div>
+
+<div class="deck">
+  <div class="cell"><label>Gravity <b id="g-v">9.8</b></label><input type="range" id="g" min="0" max="30" step="0.1" value="9.8"></div>
+  <div class="cell"><label>Restitution <b id="e-v">0.18</b></label><input type="range" id="e" min="0" max="0.95" step="0.01" value="0.18"></div>
+  <div class="cell"><label>Friction <b id="f-v">0.35</b></label><input type="range" id="f" min="0" max="1" step="0.01" value="0.35"></div>
+  <div class="cell"><label>Iterations <b id="i-v">10</b></label><input type="range" id="i" min="1" max="24" step="1" value="10"></div>
+  <div class="cell"><label>Time scale <b id="t-v">1.00</b></label><input type="range" id="t" min="0.1" max="1.5" step="0.05" value="1"></div>
+</div>
+<div class="toggles">
+  <label><input type="checkbox" id="dbg"> contact points and normals</label>
+  <label><input type="checkbox" id="slp" checked> sleeping</label>
+  <label><input type="checkbox" id="wire"> wireframe</label>
+  <label><input type="checkbox" id="run" checked> run</label>
+  <button style="margin-left:auto;font-family:var(--m);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;background:none;border:1px solid var(--line);color:var(--mid);padding:6px 12px;cursor:pointer" id="step">step once</button>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="k">Bodies</div><div class="v" id="s-n">0</div></div>
+  <div class="stat"><div class="k">Awake</div><div class="v" id="s-a">0</div></div>
+  <div class="stat"><div class="k">Contacts</div><div class="v" id="s-c">0</div></div>
+  <div class="stat"><div class="k">Solve</div><div class="v" id="s-ms">0<span style="font-size:14px;font-family:var(--m);color:var(--low)">ms</span></div></div>
+  <div class="stat"><div class="k">Energy</div><div class="v" id="s-e">0</div></div>
+</div>
+
+<footer>
+  Built by <a href="https://bxzex.com">bxzex</a>. Convex polygons and circles, an SAT narrow phase producing real contact manifolds, and a sequential impulse solver with warm starting and Baumgarte position correction.
+  <a href="https://github.com/bxzex/tumble">Source on GitHub</a>.
+</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const cv = $("c"), ctx = cv.getContext("2d");
+
+/* ---------- small vector helpers ---------- */
+const V = (x,y) => ({x,y});
+const add=(a,b)=>V(a.x+b.x,a.y+b.y), sub=(a,b)=>V(a.x-b.x,a.y-b.y);
+const mul=(a,s)=>V(a.x*s,a.y*s), dot=(a,b)=>a.x*b.x+a.y*b.y;
+const cross=(a,b)=>a.x*b.y-a.y*b.x;                 // scalar z of a 2D cross
+const crossSV=(s,v)=>V(-s*v.y, s*v.x);
+const len=a=>Math.hypot(a.x,a.y);
+const norm=a=>{ const l=len(a)||1; return V(a.x/l,a.y/l); };
+
+/* =====================================================================
+   Bodies. A polygon carries its vertices in local space and a rotation;
+   mass and inertia come from the polygon's own area integrals, so a
+   long plank really does resist spin more than a square of equal mass.
+   ===================================================================== */
+let bodyId = 1;
+let COLORS = ["#ff2e4d","#ffe500","#00e0ff","#9b5cff","#00ff85","#ff7a00"];
+let nextColor = 0;
+
+function makeBody(opts){
+  const b = Object.assign({
+    id: bodyId++,
+    pos:V(0,0), vel:V(0,0), angle:0, angVel:0,
+    invMass:0, invI:0, restitution:0.2, friction:0.4,
+    isStatic:false, shape:"poly", verts:[], radius:0,
+    sleepTimer:0, asleep:false, color:COLORS[nextColor++ % COLORS.length],
+  }, opts);
+  if(b.shape === "poly") computePolyMass(b);
+  else computeCircleMass(b);
+  if(b.isStatic){ b.invMass = 0; b.invI = 0; }
+  return b;
+}
+function computePolyMass(b){
+  // area and second moment from the standard polygon integrals
+  let area = 0, I = 0, cx = 0, cy = 0;
+  const v = b.verts, n = v.length;
+  for(let i=0;i<n;i++){
+    const p = v[i], q = v[(i+1)%n];
+    const d = cross(p,q);
+    area += d;
+    cx += (p.x+q.x)*d; cy += (p.y+q.y)*d;
+    I += d * (dot(p,p) + dot(p,q) + dot(q,q));
+  }
+  area *= 0.5;
+  const density = b.density || 1;
+  const mass = Math.abs(area)*density;
+  cx /= (6*area); cy /= (6*area);
+  for(const p of v){ p.x -= cx; p.y -= cy; }     // recentre on the centroid
+  I = Math.abs(I)/12*density;
+  I -= mass*(cx*cx+cy*cy);
+  b.mass = mass; b.inertia = Math.abs(I);
+  b.invMass = mass > 0 ? 1/mass : 0;
+  b.invI = b.inertia > 0 ? 1/b.inertia : 0;
+}
+function computeCircleMass(b){
+  const density = b.density || 1;
+  const mass = Math.PI*b.radius*b.radius*density;
+  b.mass = mass; b.inertia = mass*b.radius*b.radius*0.5;
+  b.invMass = 1/mass; b.invI = 1/b.inertia;
+}
+function worldVerts(b){
+  const c = Math.cos(b.angle), s = Math.sin(b.angle);
+  return b.verts.map(p => V(b.pos.x + p.x*c - p.y*s, b.pos.y + p.x*s + p.y*c));
+}
+function boxVerts(w,h){ return [V(-w/2,-h/2), V(w/2,-h/2), V(w/2,h/2), V(-w/2,h/2)]; }
+function ngonVerts(r, n, phase){
+  const out = [];
+  for(let i=0;i<n;i++){ const a = (i/n)*Math.PI*2 + (phase||0); out.push(V(Math.cos(a)*r, Math.sin(a)*r)); }
+  return out;
+}
+
+/* =====================================================================
+   Narrow phase. Separating axis for polygon pairs, producing not just a
+   yes or no but the axis of least penetration and a clipped contact
+   manifold, which is what the solver needs to stop a box rocking.
+   ===================================================================== */
+// Outward edge normal, given the polygons are wound consistently (positive area).
+function edgeNormal(a, b){ const e = sub(b,a); return norm(V(e.y, -e.x)); }
+
+// For every face of v1, the smallest distance any vertex of v2 sits from that
+// face plane. The largest such value is the separating distance: positive means
+// a gap, and the face that produced it is the reference face.
+function maxSeparation(v1, v2){
+  let best = -Infinity, edge = 0;
+  for(let i=0;i<v1.length;i++){
+    const a = v1[i], b = v1[(i+1)%v1.length], n = edgeNormal(a,b);
+    let minD = Infinity;
+    for(const p of v2) minD = Math.min(minD, dot(sub(p,a), n));
+    if(minD > best){ best = minD; edge = i; }
+  }
+  return { sep:best, edge };
+}
+// Sutherland-Hodgman against a single plane: keep what is behind it.
+function clipToPlane(v0, v1, n, o){
+  const out = [], d0 = dot(n,v0) - o, d1 = dot(n,v1) - o;
+  if(d0 <= 0) out.push(v0);
+  if(d1 <= 0) out.push(v1);
+  if(d0*d1 < 0){ const t = d0/(d0-d1); out.push(add(v0, mul(sub(v1,v0), t))); }
+  return out;
+}
+function satPoly(A, B){
+  const va = worldVerts(A), vb = worldVerts(B);
+  const qa = maxSeparation(va, vb); if(qa.sep > 0) return null;
+  const qb = maxSeparation(vb, va); if(qb.sep > 0) return null;
+
+  // the deeper face loses; ties go to A so the choice stays stable frame to frame
+  let refV, incV, refIdx, flip;
+  if(qa.sep >= qb.sep - 1e-6){ refV = va; incV = vb; refIdx = qa.edge; flip = false; }
+  else { refV = vb; incV = va; refIdx = qb.edge; flip = true; }
+
+  const refA = refV[refIdx], refB = refV[(refIdx+1)%refV.length];
+  const refN = edgeNormal(refA, refB), tan = norm(sub(refB, refA));
+
+  // the incident face is the one most squarely facing the reference
+  let inc = 0, worst = Infinity;
+  for(let i=0;i<incV.length;i++){
+    const d = dot(edgeNormal(incV[i], incV[(i+1)%incV.length]), refN);
+    if(d < worst){ worst = d; inc = i; }
+  }
+  let p0 = incV[inc], p1 = incV[(inc+1)%incV.length];
+
+  let cl = clipToPlane(p0, p1, mul(tan,-1), -dot(tan, refA));
+  if(cl.length < 2) return null;
+  cl = clipToPlane(cl[0], cl[1], tan, dot(tan, refB));
+  if(cl.length < 2) return null;
+
+  // each surviving point carries its own depth, which is what keeps a resting
+  // box from being pushed harder at one corner than the other
+  const points = [];
+  let deepest = 0;
+  for(const q of cl){
+    const sep = dot(sub(q, refA), refN);
+    if(sep <= 0){
+      points.push({ point:q, depth:-sep, normalImpulse:0, tangentImpulse:0 });
+      deepest = Math.max(deepest, -sep);
+    }
+  }
+  if(!points.length) return null;
+  return { a:A, b:B, normal: flip ? mul(refN,-1) : refN, depth:deepest, points };
+}
+function circleCircle(A, B){
+  const d = sub(B.pos, A.pos), dist = len(d), r = A.radius + B.radius;
+  if(dist >= r || dist === 0) return null;
+  const n = mul(d, 1/dist);
+  return { a:A, b:B, normal:n, depth:r-dist,
+           points:[{ point: add(A.pos, mul(n, A.radius)), depth:r-dist, normalImpulse:0, tangentImpulse:0 }] };
+}
+function polyCircle(P, C, flip){
+  const v = worldVerts(P);
+  let best = -Infinity, closest = null, n = null;
+  for(let i=0;i<v.length;i++){
+    const a = v[i], b = v[(i+1)%v.length];
+    const e = sub(b,a), t = Math.max(0, Math.min(1, dot(sub(C.pos,a), e)/dot(e,e)));
+    const p = add(a, mul(e,t));
+    const d = sub(C.pos, p), dist = len(d);
+    const pen = C.radius - dist;
+    if(pen > best){ best = pen; closest = p; n = dist > 1e-6 ? mul(d,1/dist) : norm(V(-e.y,e.x)); }
+  }
+  if(best <= 0) return null;
+  // inside the polygon entirely: push out along the shallowest edge
+  const normal = flip ? mul(n,-1) : n;
+  const A = flip ? C : P, B = flip ? P : C;
+  return { a:A, b:B, normal: dot(sub(B.pos,A.pos), normal) < 0 ? mul(normal,-1) : normal,
+           depth:best, points:[{ point:closest, depth:best, normalImpulse:0, tangentImpulse:0 }] };
+}
+function collide(A, B){
+  if(A.shape === "poly" && B.shape === "poly") return satPoly(A,B);
+  if(A.shape === "circle" && B.shape === "circle") return circleCircle(A,B);
+  if(A.shape === "poly") return polyCircle(A,B,false);
+  return polyCircle(B,A,true);
+}
+
+/* =====================================================================
+   World and solver.
+   ===================================================================== */
+const world = {
+  bodies: [], contacts: [], gravity: 9.8, iterations: 10,
+  restitution: 0.18, friction: 0.35, sleeping: true, solveMs: 0, touching: new Map(),
+};
+const SCALE = 26;                       // pixels per metre
+const SLEEP_LIN = 0.14, SLEEP_ANG = 0.14, SLEEP_TIME = 0.5, SLEEP_DRIFT = 0.2;
+
+function aabb(b){
+  if(b.shape === "circle") return { x0:b.pos.x-b.radius, y0:b.pos.y-b.radius, x1:b.pos.x+b.radius, y1:b.pos.y+b.radius };
+  const v = worldVerts(b);
+  return { x0:Math.min(...v.map(p=>p.x)), y0:Math.min(...v.map(p=>p.y)),
+           x1:Math.max(...v.map(p=>p.x)), y1:Math.max(...v.map(p=>p.y)) };
+}
+function overlaps(a,b){ return !(a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0); }
+
+function step(dt){
+  const t0 = performance.now();
+  const bs = world.bodies;
+
+  for(const b of bs){
+    b.bv = V(0,0); b.bav = 0;
+    if(b.isStatic || b.asleep) continue;
+    b.vel.y += world.gravity*dt;
+    b.vel = mul(b.vel, 1 - 0.0016);
+    b.angVel *= 1 - 0.0016;
+  }
+
+  // broad phase: sweep the AABBs, then run the narrow phase on survivors
+  const boxes = bs.map(aabb);
+  const pairs = [];
+  for(let i=0;i<bs.length;i++)
+    for(let j=i+1;j<bs.length;j++){
+      const A = bs[i], B = bs[j];
+      if(A.isStatic && B.isStatic) continue;
+      if(A.asleep && B.asleep) continue;
+      if((A.isStatic && B.asleep) || (B.isStatic && A.asleep)) continue;
+      if(overlaps(boxes[i], boxes[j])) pairs.push([A,B]);
+    }
+
+  const contacts = [];
+  for(const [A,B] of pairs){
+    const c = collide(A,B);
+    if(c){
+      c.restitution = Math.min(A.restitution, B.restitution);
+      c.friction = Math.sqrt(A.friction*B.friction);
+      contacts.push(c);
+      const moving = x => len(x.vel) > SLEEP_LIN || Math.abs(x.angVel) > SLEEP_ANG;
+      if(A.asleep && !B.isStatic && !B.asleep && moving(B)) wake(A);
+      if(B.asleep && !A.isStatic && !A.asleep && moving(A)) wake(B);
+    }
+  }
+  // Warm starting: a stack only settles if the solver starts from where it
+  // finished last frame. Match this frame's points to last frame's by position
+  // and seed the accumulated impulses, then apply them before iterating.
+  const prev = world.prevContacts || new Map();
+  const now = new Map();
+  for(const c of contacts){
+    const key = c.a.id + ":" + c.b.id;
+    const old = prev.get(key);
+    if(old && Math.abs(dot(old.normal, c.normal)) > 0.9){
+      for(const p of c.points){
+        let best = null, bd = 0.09;
+        for(const q of old.points){
+          const d = Math.hypot(q.point.x-p.point.x, q.point.y-p.point.y);
+          if(d < bd){ bd = d; best = q; }
+        }
+        if(best){ p.normalImpulse = best.normalImpulse; p.tangentImpulse = best.tangentImpulse; }
+      }
+    }
+    now.set(key, c);
+  }
+  world.prevContacts = now;
+  world.contacts = contacts;
+
+  world.touching = new Map();
+  for(const c of contacts){
+    if(!world.touching.has(c.a.id)) world.touching.set(c.a.id, []);
+    if(!world.touching.has(c.b.id)) world.touching.set(c.b.id, []);
+    world.touching.get(c.a.id).push(c.b);
+    world.touching.get(c.b.id).push(c.a);
+  }
+
+  // pre-compute the per-contact constants once, then iterate
+  for(const c of contacts){
+    const { a:A, b:B, normal:n } = c;
+    for(const p of c.points){
+      p.ra = sub(p.point, A.pos); p.rb = sub(p.point, B.pos);
+      const rnA = cross(p.ra, n), rnB = cross(p.rb, n);
+      p.massN = 1/(imass(A) + imass(B) + rnA*rnA*iinert(A) + rnB*rnB*iinert(B) || 1e-9);
+      const t = V(-n.y, n.x);
+      const rtA = cross(p.ra, t), rtB = cross(p.rb, t);
+      p.massT = 1/(imass(A) + imass(B) + rtA*rtA*iinert(A) + rtB*rtB*iinert(B) || 1e-9);
+      const rv = relVel(A,B,p.ra,p.rb);
+      p.bounce = dot(rv, n) < -1 ? -c.restitution*dot(rv,n) : 0;
+      // Baumgarte: feed a fraction of the overlap back as bias velocity
+      p.bias = 0.2/dt * Math.max(0, p.depth - 0.012);
+      p.biasImpulse = 0;
+    }
+  }
+  for(const c of contacts){
+    const n = c.normal, t = V(-n.y, n.x);
+    for(const p of c.points){
+      const imp = add(mul(n, p.normalImpulse), mul(t, p.tangentImpulse));
+      applyImpulse(c.a, c.b, p, imp);
+    }
+  }
+  for(let it=0; it<world.iterations; it++){
+    for(const c of contacts) solveContact(c);
+  }
+  for(const b of bs){
+    if(b.isStatic || b.asleep) continue;
+    const sp = len(b.vel);
+    if(sp > 70) b.vel = mul(b.vel, 70/sp);
+    b.angVel = Math.max(-40, Math.min(40, b.angVel));
+    b.pos = add(b.pos, mul(add(b.vel, b.bv || V(0,0)), dt));
+    b.angle += (b.angVel + (b.bav || 0))*dt;
+    if(world.sleeping){
+      if(!b.restRef) b.restRef = { pos:V(b.pos.x,b.pos.y), angle:b.angle };
+      const moved = len(sub(b.pos, b.restRef.pos)) + Math.abs(b.angle - b.restRef.angle)*0.5;
+      if(moved > SLEEP_DRIFT){
+        b.restRef = { pos:V(b.pos.x,b.pos.y), angle:b.angle };
+        b.sleepTimer = 0;
+      } else {
+        b.sleepTimer += dt;
+        // only sleep once everything this body is touching is also at rest,
+        // otherwise a lone sleeper turns immovable mid-settle and kicks the pile
+        if(b.sleepTimer > SLEEP_TIME && islandAtRest(b)){ b.asleep = true; b.vel = V(0,0); b.angVel = 0; }
+      }
+    } else { b.asleep = false; b.sleepTimer = 0; }
+  }
+  world.solveMs = performance.now() - t0;
+}
+// A sleeping body is immovable for as long as it sleeps. Without this it keeps
+// absorbing impulses it never integrates, then wakes carrying all of them.
+const imass = b => (b.isStatic || b.asleep) ? 0 : b.invMass;
+const iinert = b => (b.isStatic || b.asleep) ? 0 : b.invI;
+function relVel(A,B,ra,rb){
+  return sub(add(B.vel, crossSV(B.angVel, rb)), add(A.vel, crossSV(A.angVel, ra)));
+}
+function solveContact(c){
+  const { a:A, b:B, normal:n } = c;
+  const t = V(-n.y, n.x);
+  for(const p of c.points){
+    let rv = relVel(A,B,p.ra,p.rb);
+
+    // normal: accumulated impulse, clamped so the total never pulls
+    let vn = dot(rv, n);
+    let dPn = p.massN * (-vn + p.bounce);
+    const old = p.normalImpulse;
+    p.normalImpulse = Math.max(0, old + dPn);
+    dPn = p.normalImpulse - old;
+    applyImpulse(A,B,p, mul(n, dPn));
+
+    // split impulse: the overlap is pushed out through a pseudo velocity that
+    // moves position but is never added to the body's real motion, so the
+    // correction cannot feed energy back into the simulation
+    if(p.bias > 0){
+      const rvb = sub(add(B.bv, crossSV(B.bav, p.rb)), add(A.bv, crossSV(A.bav, p.ra)));
+      let dPb = p.massN * (-dot(rvb, n) + p.bias);
+      const ob = p.biasImpulse;
+      p.biasImpulse = Math.max(0, ob + dPb);
+      dPb = p.biasImpulse - ob;
+      const imp = mul(n, dPb);
+      if(imass(A)){ A.bv = sub(A.bv, mul(imp, A.invMass)); A.bav -= A.invI*cross(p.ra, imp); }
+      if(imass(B)){ B.bv = add(B.bv, mul(imp, B.invMass)); B.bav += B.invI*cross(p.rb, imp); }
+    }
+
+    // friction: clamped to the Coulomb cone around the normal impulse
+    rv = relVel(A,B,p.ra,p.rb);
+    const vt = dot(rv, t);
+    let dPt = p.massT * (-vt);
+    const maxT = c.friction * p.normalImpulse;
+    const oldT = p.tangentImpulse;
+    p.tangentImpulse = Math.max(-maxT, Math.min(maxT, oldT + dPt));
+    dPt = p.tangentImpulse - oldT;
+    applyImpulse(A,B,p, mul(t, dPt));
+  }
+}
+function applyImpulse(A,B,p,imp){
+  if(imass(A)){ A.vel = sub(A.vel, mul(imp, A.invMass)); A.angVel -= A.invI*cross(p.ra, imp); }
+  if(imass(B)){ B.vel = add(B.vel, mul(imp, B.invMass)); B.angVel += B.invI*cross(p.rb, imp); }
+}
+// neighbours are recorded while the contacts are built, so this is a lookup
+function islandAtRest(b){
+  const ns = world.touching.get(b.id);
+  if(!ns) return true;
+  for(const o of ns){
+    if(o.isStatic || o.asleep) continue;
+    if(o.sleepTimer <= SLEEP_TIME*0.5) return false;
+  }
+  return true;
+}
+function wake(b){ b.asleep = false; b.sleepTimer = 0; b.restRef = null; }
+
+/* =====================================================================
+   Scenes
+   ===================================================================== */
+let W = 0, H = 0;
+function bounds(){
+  const pad = 0.6, T = 8, h = H/SCALE, w = W/SCALE, tall = h + 70;
+  // the visible surface stays at `pad`; the mass extends away from the arena so
+  // nothing can pass through it inside a single step
+  world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(w + T*2, T), pos:V(w/2, h - pad + T/2), isStatic:true, color:"#1a1a1a" }));
+  world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(T, tall), pos:V(pad - T/2, h - tall/2), isStatic:true, color:"#1a1a1a" }));
+  world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(T, tall), pos:V(w - pad + T/2, h - tall/2), isStatic:true, color:"#1a1a1a" }));
+}
+const SCENES = {
+  "Pyramid": () => {
+    bounds();
+    const rows = 9, s = 1.05, cx = W/SCALE/2;
+    for(let r=0;r<rows;r++)
+      for(let i=0;i<=r;i++)
+        world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(s*0.95, s*0.95),
+          pos:V(cx - r*s/2 + i*s, H/SCALE - 1.6 - (rows-1-r)*s) }));
+  },
+  "Rain": () => {
+    bounds();
+    for(let i=0;i<70;i++){
+      const r = Math.random();
+      const x = 2 + Math.random()*(W/SCALE-4), y = -Math.random()*20;
+      if(r < 0.4) world.bodies.push(makeBody({ shape:"circle", radius:0.4+Math.random()*0.45, pos:V(x,y) }));
+      else if(r < 0.75) world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(0.8+Math.random(), 0.8+Math.random()), pos:V(x,y), angle:Math.random()*3 }));
+      else world.bodies.push(makeBody({ shape:"poly", verts:ngonVerts(0.6+Math.random()*0.5, 3+((Math.random()*4)|0), Math.random()), pos:V(x,y) }));
+    }
+  },
+  "Ramps": () => {
+    bounds();
+    for(let i=0;i<4;i++){
+      const y = 3.6 + i*4.2, dir = i%2 ? 1 : -1;
+      world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(W/SCALE*0.62, 0.46),
+        pos:V(W/SCALE/2 + dir*2.2, y), angle: dir*0.17, isStatic:true, color:"#242424" }));
+    }
+    for(let i=0;i<26;i++)
+      world.bodies.push(makeBody({ shape:"circle", radius:0.34+Math.random()*0.3,
+        pos:V(3+Math.random()*3, -Math.random()*14), restitution:0.45 }));
+  },
+  "Tower": () => {
+    bounds();
+    const cx = W/SCALE/2;
+    for(let i=0;i<13;i++){
+      if(i%2===0){
+        world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(0.5,2.2), pos:V(cx-1.5, H/SCALE-2.2-i*1.4) }));
+        world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(0.5,2.2), pos:V(cx+1.5, H/SCALE-2.2-i*1.4) }));
+      } else {
+        world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(4.2,0.5), pos:V(cx, H/SCALE-2.2-i*1.4) }));
+      }
+    }
+  },
+  "Dominoes": () => {
+    bounds();
+    for(let i=0;i<24;i++)
+      world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(0.34,2.6), pos:V(3+i*1.5, H/SCALE-2.0), friction:0.6 }));
+    world.bodies.push(makeBody({ shape:"circle", radius:0.9, pos:V(1.4, H/SCALE-11), vel:V(9,0), density:2.4 }));
+  },
+  "Mixed": () => {
+    bounds();
+    const cx = W/SCALE/2;
+    world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(11,0.5), pos:V(cx, H/SCALE-9), angle:0.1, isStatic:true, color:"#242424" }));
+    for(let i=0;i<40;i++){
+      const x = cx-5+Math.random()*10, y = -Math.random()*20;
+      const k = Math.random();
+      if(k<0.35) world.bodies.push(makeBody({ shape:"circle", radius:0.35+Math.random()*0.4, pos:V(x,y) }));
+      else if(k<0.7) world.bodies.push(makeBody({ shape:"poly", verts:ngonVerts(0.5+Math.random()*0.5, 5, Math.random()), pos:V(x,y) }));
+      else world.bodies.push(makeBody({ shape:"poly", verts:boxVerts(0.6+Math.random()*1.4, 0.5+Math.random()*0.6), pos:V(x,y), angle:Math.random()*3 }));
+    }
+  },
+};
+let sceneName = "Pyramid";
+function loadScene(name){
+  sceneName = name;
+  world.bodies = []; world.contacts = []; nextColor = 0;
+  SCENES[name]();
+  world.bodies.forEach(b => { b.restitution = b.isStatic ? world.restitution : world.restitution; b.friction = world.friction; });
+  [...$("scenes").querySelectorAll("button")].forEach(x => x.classList.toggle("on", x.textContent === name));
+}
+
+/* ---------- render ---------- */
+function resize(){
+  const d = window.devicePixelRatio||1, r = cv.getBoundingClientRect();
+  cv.width = Math.round(r.width*d); cv.height = Math.round(560*d);
+  cv.style.height = "560px";
+  ctx.setTransform(d,0,0,d,0,0);
+  W = r.width; H = 560;
+}
+function draw(){
+  ctx.fillStyle = "#000"; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = "#0e0e0e"; ctx.lineWidth = 1;
+  for(let x=0;x<W;x+=SCALE){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<H;y+=SCALE){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  const wire = $("wire").checked;
+  for(const b of world.bodies){
+    const dim = b.asleep;
+    ctx.save();
+    if(b.shape === "circle"){
+      const p = mul(b.pos, SCALE);
+      ctx.beginPath(); ctx.arc(p.x, p.y, b.radius*SCALE, 0, 6.2831853);
+      if(wire){ ctx.strokeStyle = dim ? "#4a4a4a" : b.color; ctx.lineWidth = 1.6; ctx.stroke(); }
+      else { ctx.fillStyle = dim ? "#2a2a2a" : b.color; ctx.fill(); }
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + Math.cos(b.angle)*b.radius*SCALE, p.y + Math.sin(b.angle)*b.radius*SCALE);
+      ctx.strokeStyle = wire ? "#333" : "rgba(0,0,0,.55)"; ctx.lineWidth = 1.6; ctx.stroke();
+    } else {
+      const v = worldVerts(b).map(p => mul(p, SCALE));
+      ctx.beginPath();
+      v.forEach((p,i) => i ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y));
+      ctx.closePath();
+      if(wire || b.isStatic){ ctx.strokeStyle = b.isStatic ? "#2e2e2e" : (dim ? "#4a4a4a" : b.color); ctx.lineWidth = b.isStatic ? 1.4 : 1.6; ctx.stroke(); if(b.isStatic && !wire){ ctx.fillStyle="#111"; ctx.fill(); } }
+      else { ctx.fillStyle = dim ? "#2a2a2a" : b.color; ctx.fill(); }
+    }
+    ctx.restore();
+  }
+
+  if($("dbg").checked){
+    for(const c of world.contacts){
+      for(const p of c.points){
+        const q = mul(p.point, SCALE);
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(q.x-2, q.y-2, 4, 4);
+        ctx.strokeStyle = "#ffe500"; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(q.x,q.y);
+        ctx.lineTo(q.x + c.normal.x*16, q.y + c.normal.y*16);
+        ctx.stroke();
+      }
+    }
+  }
+  if(dragBody && dragPoint){
+    const a = mul(dragBody.pos, SCALE);
+    ctx.strokeStyle = "#ffe500"; ctx.setLineDash([4,4]); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(dragPoint.x*SCALE, dragPoint.y*SCALE); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+/* ---------- interaction ---------- */
+let dragBody = null, dragPoint = null;
+function pick(p){
+  for(let i=world.bodies.length-1;i>=0;i--){
+    const b = world.bodies[i];
+    if(b.isStatic) continue;
+    if(b.shape === "circle"){ if(len(sub(p,b.pos)) < b.radius) return b; }
+    else {
+      const v = worldVerts(b);
+      let inside = true;
+      for(let k=0;k<v.length;k++){
+        const a = v[k], c = v[(k+1)%v.length];
+        if(cross(sub(c,a), sub(p,a)) < 0){ inside = false; break; }
+      }
+      if(inside) return b;
+    }
+  }
+  return null;
+}
+const at = e => { const r = cv.getBoundingClientRect(); return V((e.clientX-r.left)/SCALE, (e.clientY-r.top)/SCALE); };
+cv.addEventListener("pointerdown", e => {
+  if(e.button === 2) return;
+  const p = at(e), b = pick(p);
+  if(b){ dragBody = b; dragPoint = p; wake(b); cv.setPointerCapture(e.pointerId); }
+  else {
+    const k = Math.random();
+    const nb = k < 0.4
+      ? makeBody({ shape:"circle", radius:0.45+Math.random()*0.4, pos:p, restitution:world.restitution, friction:world.friction })
+      : makeBody({ shape:"poly", verts: k < 0.7 ? boxVerts(0.9+Math.random(), 0.9+Math.random()) : ngonVerts(0.7+Math.random()*0.4, 3+((Math.random()*4)|0), Math.random()),
+                   pos:p, angle:Math.random()*3, restitution:world.restitution, friction:world.friction });
+    world.bodies.push(nb);
+  }
+});
+cv.addEventListener("pointermove", e => { if(dragBody) dragPoint = at(e); });
+cv.addEventListener("pointerup", e => {
+  if(dragBody && dragPoint){
+    const p = at(e);
+    dragBody.vel = mul(sub(p, dragBody.pos), 4.5);
+    wake(dragBody);
+  }
+  dragBody = null; dragPoint = null;
+});
+cv.addEventListener("contextmenu", e => {
+  e.preventDefault();
+  const p = at(e);
+  for(const b of world.bodies){
+    if(b.isStatic) continue;
+    const d = sub(b.pos, p), dist = len(d);
+    if(dist < 9){
+      const f = (1 - dist/9) * 26;
+      b.vel = add(b.vel, mul(norm(d), f));
+      b.angVel += (Math.random()-0.5)*6;
+      wake(b);
+    }
+  }
+});
+
+/* ---------- loop ---------- */
+let last = performance.now(), fpsAcc = 0, fpsN = 0, stepOnce = false;
+function frame(now){
+  requestAnimationFrame(frame);
+  const raw = Math.min(0.033, (now-last)/1000); last = now;
+  const running = $("run").checked;
+  $("mode").textContent = running ? "RUNNING" : "PAUSED";
+  if(running || stepOnce){
+    const dt = (stepOnce ? 1/120 : raw) * +$("t").value;
+    if(dragBody && dragPoint){
+      // a spring to the cursor, so throwing feels like grabbing
+      const target = dragPoint;
+      dragBody.vel = mul(sub(target, dragBody.pos), 14);
+      dragBody.angVel *= 0.86;
+    }
+    step(Math.max(1/240, dt));
+    stepOnce = false;
+  }
+  draw();
+  fpsAcc += raw; fpsN++;
+  if(fpsAcc > 0.4){ $("fps").textContent = Math.round(fpsN/fpsAcc)+" fps"; fpsAcc = 0; fpsN = 0; }
+
+  const awake = world.bodies.filter(b => !b.isStatic && !b.asleep).length;
+  const dyn = world.bodies.filter(b => !b.isStatic).length;
+  let ke = 0;
+  for(const b of world.bodies) if(!b.isStatic) ke += 0.5*b.mass*dot(b.vel,b.vel) + 0.5*b.inertia*b.angVel*b.angVel;
+  $("s-n").textContent = dyn;
+  $("s-a").textContent = awake;
+  $("s-c").textContent = world.contacts.reduce((a,c)=>a+c.points.length,0);
+  $("s-ms").innerHTML = world.solveMs.toFixed(2)+'<span style="font-size:14px;font-family:var(--m);color:var(--low)">ms</span>';
+  $("s-e").textContent = Math.round(ke);
+  $("hud").innerHTML = "SCENE <b>"+sceneName.toUpperCase()+"</b><br>SOLVER <b>SEQUENTIAL IMPULSE</b><br>ITERATIONS <b>"+world.iterations+"</b><br>BROAD PHASE <b>SWEEP AABB</b>";
+}
+
+/* ---------- controls ---------- */
+const scenesEl = $("scenes");
+Object.keys(SCENES).forEach(name => {
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.onclick = () => loadScene(name);
+  scenesEl.insertBefore(b, scenesEl.querySelector(".right"));
+});
+const bind = (id, key, fmt, apply) => {
+  const el = $(id), out = $(id+"-v");
+  el.oninput = () => { const v = +el.value; out.textContent = fmt(v); apply(v); };
+  out.textContent = fmt(+el.value);
+};
+bind("g","gravity",v=>v.toFixed(1),v=>world.gravity=v);
+bind("e","rest",v=>v.toFixed(2),v=>{ world.restitution=v; world.bodies.forEach(b=>b.restitution=v); });
+bind("f","fric",v=>v.toFixed(2),v=>{ world.friction=v; world.bodies.forEach(b=>b.friction=v); });
+bind("i","iter",v=>v,v=>world.iterations=v);
+bind("t","ts",v=>v.toFixed(2),()=>{});
+$("slp").onchange = e => { world.sleeping = e.target.checked; if(!e.target.checked) world.bodies.forEach(wake); };
+$("step").onclick = () => { stepOnce = true; };
+
+window.addEventListener("resize", () => { const old = sceneName; resize(); loadScene(old); });
+resize(); loadScene("Pyramid"); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
