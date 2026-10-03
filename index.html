@@ -10,8 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Chivo+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
 :root{
-  --bg:#000; --ink:#fff; --mid:#8a8a8a; --low:#3c3c3c; --line:#202020;
-  --c1:#ff2e4d; --c2:#ffe500; --c3:#00e0ff; --c4:#9b5cff; --c5:#00ff85;
+  --bg:#000; --ink:#fff; --mid:#8a8a8a; --low:#636363; --line:#202020;
+  --c1:#ff2e4d; --c2:#ffe500; --c3:#2b5bff; --c4:#f2efe6; --c5:#ff7a00;
   --d:"Anton",Impact,sans-serif;
   --m:"Chivo Mono",ui-monospace,monospace;
 }
@@ -36,7 +36,7 @@ h1{font-family:var(--d);font-size:78px;line-height:.82;margin:0;letter-spacing:.
 canvas{display:block;width:100%;background:#000;cursor:crosshair;touch-action:none}
 .hud{position:absolute;top:14px;left:14px;font-size:10.5px;line-height:1.8;color:var(--low);letter-spacing:.08em;pointer-events:none}
 .hud b{color:var(--ink);font-weight:500}
-.tip{position:absolute;bottom:14px;left:14px;font-size:10.5px;color:var(--low);letter-spacing:.08em}
+.tip{position:absolute;top:14px;right:14px;font-size:10.5px;color:var(--low);letter-spacing:.08em}
 
 .deck{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:0;border-bottom:1px solid var(--line)}
 .cell{padding:15px 18px;border-right:1px solid var(--line)}
@@ -67,7 +67,7 @@ footer a{color:var(--mid)}
 </header>
 
 <div class="bar" id="scenes">
-  <div class="right"><span id="fps">— fps</span><span id="mode">RUNNING</span></div>
+  <div class="right"><span id="fps">fps</span><span id="mode">RUNNING</span></div>
 </div>
 
 <div class="stage">
@@ -100,7 +100,7 @@ footer a{color:var(--mid)}
 </div>
 
 <footer>
-  Built by <a href="https://bxzex.com">bxzex</a>. Convex polygons and circles, an SAT narrow phase producing real contact manifolds, and a sequential impulse solver with warm starting and Baumgarte position correction.
+  © 2026 <a href="https://bxzex.com">bxzex</a>. Convex polygons and circles, an SAT narrow phase producing real contact manifolds, and a sequential impulse solver with warm starting and Baumgarte position correction.
   <a href="https://github.com/bxzex/tumble">Source on GitHub</a>.
 </footer>
 </div>
@@ -124,7 +124,7 @@ const norm=a=>{ const l=len(a)||1; return V(a.x/l,a.y/l); };
    long plank really does resist spin more than a square of equal mass.
    ===================================================================== */
 let bodyId = 1;
-let COLORS = ["#ff2e4d","#ffe500","#00e0ff","#9b5cff","#00ff85","#ff7a00"];
+let COLORS = ["#ff2e4d","#ffe500","#2b5bff","#f2efe6","#ff7a00","#ff2e4d"];
 let nextColor = 0;
 
 function makeBody(opts){
